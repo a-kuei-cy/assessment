@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測驗平台 - 管理者後台</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background-color: #f3f4f6; }
+        .glass-panel { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(10px); }
+        .tab-active { border-bottom: 4px solid #3b82f6; color: #1d4ed8; font-weight: bold; }
+        .tab-inactive { color: #6b7280; font-weight: medium; border-bottom: 4px solid transparent; }
+        .tab-inactive:hover { color: #3b82f6; border-bottom: 4px solid #bfdbfe; }
+        /* 隱藏捲軸 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* 截斷長文字 */
+        .truncate-2-lines {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;  
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="min-h-screen"> <!-- 移除這裡的 hidden 和 id -->
+
+    <!-- 🌟 將所有後台內容用一個 div 包起來，預設隱藏 (hidden) 🌟 -->
+    <div id="app-content" class="hidden">
+        
+        <!-- 頂部導覽列 -->
+        <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center gap-2">
+                        <div class="bg-blue-600 p-2 rounded-lg text-white">
+                            <i class="ph-bold ph-kanban text-xl"></i>
+                        </div>
+                        <span class="font-bold text-xl text-gray-800 tracking-wide">測驗管理後台</span>
+                    </div>
+                    <div class="flex items-center space-x-8">
+                        <button onclick="switchTab('questions')" id="tab-questions" class="tab-active h-full px-1 flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-database"></i> 題庫管理
+                        </button>
+                        <button onclick="switchTab('scores')" id="tab-scores" class="tab-inactive h-full px-1 flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-chart-bar"></i> 成績紀錄
+                        </button>
+                        <button onclick="logout()" class="text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+                            <i class="ph-bold ph-sign-out"></i> 登出
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 載入中畫面 -->
+        <div id="view-loading" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm hidden">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-4"></div>
+            <h2 id="loading-text" class="text-xl font-bold text-gray-700 tracking-wider">載入資料中，請稍候...</h2>
+        </div>
+
+        <!-- 主要內容區 -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- ================= 題庫管理 Tab ================= -->
+            <div id="panel-questions" class="space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">題庫管理 (<span id="q-count">0</span>題)</h2>
+                        <p class="text-gray-500 text-sm mt-1">您可以新增、編輯或刪除題目。編輯完成後請務必點擊「儲存同步到雲端」。</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="openModal()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-plus"></i> 新增題目
+                        </button>
+                        <button onclick="syncToServer()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-cloud-arrow-up"></i> 儲存同步到雲端
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 題庫列表卡片 -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
+                                    <th class="py-3 px-4 font-bold w-20">年級</th>
+                                    <th class="py-3 px-4 font-bold w-1/4">題目 (Q)</th>
+                                    <th class="py-3 px-4 font-bold w-1/3">閱讀文本 Snippet</th>
+                                    <th class="py-3 px-4 font-bold">向度</th>
+                                    <th class="py-3 px-4 font-bold text-center w-32">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="q-table-body" class="divide-y divide-gray-100 text-sm">
+                                <!-- 題庫將動態渲染於此 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= 成績紀錄 Tab ================= -->
+            <div id="panel-scores" class="hidden space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">學生成績紀錄 (<span id="s-count">0</span>筆)</h2>
+                        <p class="text-gray-500 text-sm mt-1">查看所有測驗紀錄，並可匯出為 Excel/CSV 檔案。</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="exportScoresCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded shadow flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-download-simple"></i> 匯出成績 (CSV)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
+                                    <th class="py-3 px-4 font-bold">測驗時間</th>
+                                    <th class="py-3 px-4 font-bold">年級</th>
+                                    <th class="py-3 px-4 font-bold">班級</th>
+                                    <th class="py-3 px-4 font-bold">姓名</th>
+                                    <th class="py-3 px-4 font-bold text-blue-600">總分</th>
+                                    <th class="py-3 px-4 font-bold text-gray-500">擷取</th>
+                                    <th class="py-3 px-4 font-bold text-gray-500">推論</th>
+                                    <th class="py-3 px-4 font-bold text-gray-500">評鑑</th>
+                                </tr>
+                            </thead>
+                            <tbody id="s-table-body" class="divide-y divide-gray-100 text-sm">
+                                <!-- 成績將動態渲染於此 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- ================= 編輯/新增題目 Modal ================= -->
+        <div id="modal-q" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm overflow-y-auto">
+            <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+                <div class="bg-blue-600 px-6 py-4 flex justify-between items-center rounded-t-2xl shrink-0">
+                    <h3 id="modal-title" class="text-xl font-bold text-white">新增題目</h3>
+                    <button onclick="closeModal()" class="text-blue-100 hover:text-white transition-colors">
+                        <i class="ph-bold ph-x text-2xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 overflow-y-auto flex-grow space-y-4">
+                    <input type="hidden" id="modal-id">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">年級組別</label>
+                            <select id="modal-grade" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                <option value="中年級">中年級</option>
+                                <option value="高年級">高年級</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">認知向度</label>
+                            <select id="modal-skill" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                <option value="擷取理解">擷取理解</option>
+                                <option value="推論統整">推論統整</option>
+                                <option value="評鑑反思">評鑑反思</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">閱讀文本 (Text)</label>
+                        <textarea id="modal-text" rows="4" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">題目 (Question)</label>
+                        <input type="text" id="modal-q-text" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 space-y-3">
+                        <h4 class="font-bold text-blue-800 text-sm mb-2"><i class="ph-fill ph-warning-circle"></i> 注意：選項1 必須填寫「正確答案」，系統會在出題時自動打亂順序。</h4>
+                        <div>
+                            <label class="block text-sm font-bold text-green-700 mb-1">選項 1 (正確答案)</label>
+                            <input type="text" id="modal-opt1" class="w-full border border-green-300 rounded p-2 focus:ring-green-500 outline-none bg-green-50">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">選項 2 (錯誤答案)</label>
+                            <input type="text" id="modal-opt2" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">選項 3 (錯誤答案)</label>
+                            <input type="text" id="modal-opt3" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">選項 4 (錯誤答案)</label>
+                            <input type="text" id="modal-opt4" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex justify-end gap-3 shrink-0">
+                    <button onclick="closeModal()" class="px-5 py-2 text-gray-600 bg-white border border-gray-300 hover:bg-gray-100 rounded font-bold transition-colors">取消</button>
+                    <button onclick="saveQuestionToLocal()" class="px-5 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded font-bold flex items-center gap-2 transition-colors">
+                        <i class="ph-bold ph-floppy-disk"></i> 暫存題目
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div> <!-- 結束 app-content -->
+
+    <!-- ================= Javascript 邏輯 ================= -->
+    <script>
+        // 🚨 【重要】請將下方網址替換成您的 Google Apps Script 網頁應用程式網址 🚨
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4AcuIH43NIY977NG_-w9wTk1o2j5Vif4XuGE7S5UlPnU5mdmVpNqsM7fnoTXTwJCh/exec";
+        
+        // 密碼設定 (簡易防護)
+        const ADMIN_PASSWORD = "admin123";
+
+        // 全域資料
+        let questionsData = [];
+        let scoresData = [];
+        let isDataDirty = false; // 紀錄是否有修改題庫但還沒同步
+
+        // --- 登入驗證 ---
+        window.onload = async () => {
+            const { value: password } = await Swal.fire({
+                title: '管理員登入',
+                input: 'password',
+                inputPlaceholder: '請輸入管理員密碼',
+                icon: 'info',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                confirmButtonText: '登入',
+                confirmButtonColor: '#3b82f6',
+                inputValidator: (value) => {
+                    if (!value) return '密碼不能為空！';
+                    if (value !== ADMIN_PASSWORD) return '密碼錯誤！';
+                }
+            });
+
+            if (password === ADMIN_PASSWORD) {
+                // 密碼正確時，顯示剛才被隱藏的 app-content 區塊
+                document.getElementById('app-content').classList.remove('hidden');
+                document.getElementById('view-loading').classList.remove('hidden'); // 顯示載入動畫
+                initData();
+            }
+        };
+
+        function logout() {
+            Swal.fire({
+                title: '確定要登出？',
+                text: isDataDirty ? '您有尚未同步的題庫變更，登出將會遺失！' : '',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: '登出',
+                cancelButtonText: '取消'
+            }).then((result) => {
+                if (result.isConfirmed) location.reload();
+            });
+        }
+
+        // --- 載入資料 ---
+        async function initData() {
+            if (SCRIPT_URL.includes("請將這裡替換")) {
+                Swal.fire({ icon: 'error', title: '錯誤', text: '請開發者在 HTML 中設定正確的 SCRIPT_URL！' });
+                document.getElementById('view-loading').classList.add('hidden');
+                return;
+            }
+
+            try {
+                // 平行抓取題庫與成績
+                const [qRes, sRes] = await Promise.all([
+                    fetch(`${SCRIPT_URL}?action=getQuestions`),
+                    fetch(`${SCRIPT_URL}?action=getAllScores`)
+                ]);
+                
+                questionsData = await qRes.json();
+                scoresData = await sRes.json();
+                
+                renderQuestionsTable();
+                renderScoresTable();
+                
+                document.getElementById('view-loading').classList.add('hidden');
+            } catch (error) {
+                console.error(error);
+                Swal.fire({ icon: 'error', title: '連線失敗', text: '無法從伺服器取得資料。' });
+                document.getElementById('view-loading').classList.add('hidden');
+            }
+        }
+
+        // --- 介面切換 ---
+        function switchTab(tab) {
+            document.getElementById('panel-questions').classList.add('hidden');
+            document.getElementById('panel-scores').classList.add('hidden');
+            
+            document.getElementById('tab-questions').className = "tab-inactive h-full px-1 flex items-center gap-2 transition-colors";
+            document.getElementById('tab-scores').className = "tab-inactive h-full px-1 flex items-center gap-2 transition-colors";
+
+            if (tab === 'questions') {
+                document.getElementById('panel-questions').classList.remove('hidden');
+                document.getElementById('tab-questions').className = "tab-active h-full px-1 flex items-center gap-2 transition-colors";
+            } else {
+                document.getElementById('panel-scores').classList.remove('hidden');
+                document.getElementById('tab-scores').className = "tab-active h-full px-1 flex items-center gap-2 transition-colors";
+            }
+        }
+
+        // --- 渲染成績表格 ---
+        function renderScoresTable() {
+            document.getElementById('s-count').innerText = scoresData.length;
+            const tbody = document.getElementById('s-table-body');
+            tbody.innerHTML = '';
+            
+            // 反轉陣列讓最新成績在最上面
+            const reversedScores = [...scoresData].reverse();
+            
+            reversedScores.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-gray-500">${s.timestamp}</td>
+                    <td class="py-3 px-4"><span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">${s.grade}</span></td>
+                    <td class="py-3 px-4 font-medium">${s.className}</td>
+                    <td class="py-3 px-4 font-medium">${s.name}</td>
+                    <td class="py-3 px-4 font-bold text-blue-600">${s.score}</td>
+                    <td class="py-3 px-4 text-gray-500">${s.retrieve || 0}</td>
+                    <td class="py-3 px-4 text-gray-500">${s.infer || 0}</td>
+                    <td class="py-3 px-4 text-gray-500">${s.evaluate || 0}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- 渲染題庫表格 ---
+        function renderQuestionsTable() {
+            document.getElementById('q-count').innerText = questionsData.length;
+            const tbody = document.getElementById('q-table-body');
+            tbody.innerHTML = '';
+
+            questionsData.forEach(q => {
+                let badgeColor = q.grade === '中年級' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700';
+                
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50 transition-colors group";
+                tr.innerHTML = `
+                    <td class="py-3 px-4"><span class="${badgeColor} px-2 py-1 rounded font-bold text-xs whitespace-nowrap">${q.grade}</span></td>
+                    <td class="py-3 px-4 font-medium text-gray-800 truncate-2-lines" title="${q.q}">${q.q}</td>
+                    <td class="py-3 px-4 text-gray-500 text-xs truncate-2-lines" title="${q.text}">${q.text}</td>
+                    <td class="py-3 px-4 text-gray-600 text-xs">${q.skill}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="openModal('${q.id}')" class="text-blue-500 hover:text-blue-700 p-1 mr-1 transition-colors" title="編輯"><i class="ph-bold ph-pencil-simple text-lg"></i></button>
+                        <button onclick="deleteQuestion('${q.id}')" class="text-red-400 hover:text-red-600 p-1 transition-colors" title="刪除"><i class="ph-bold ph-trash text-lg"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- 模態框操作 (新增/編輯) ---
+        function openModal(id = null) {
+            const modal = document.getElementById('modal-q');
+            modal.classList.remove('hidden');
+
+            if (id) {
+                // 編輯模式
+                const q = questionsData.find(item => item.id === id);
+                document.getElementById('modal-title').innerText = "編輯題目";
+                document.getElementById('modal-id').value = q.id;
+                document.getElementById('modal-grade').value = q.grade;
+                document.getElementById('modal-skill').value = q.skill;
+                document.getElementById('modal-text').value = q.text;
+                document.getElementById('modal-q-text').value = q.q;
+                document.getElementById('modal-opt1').value = q.options[0];
+                document.getElementById('modal-opt2').value = q.options[1];
+                document.getElementById('modal-opt3').value = q.options[2];
+                document.getElementById('modal-opt4').value = q.options[3];
+            } else {
+                // 新增模式
+                document.getElementById('modal-title').innerText = "新增題目";
+                document.getElementById('modal-id').value = "";
+                document.getElementById('modal-text').value = "";
+                document.getElementById('modal-q-text').value = "";
+                document.getElementById('modal-opt1').value = "";
+                document.getElementById('modal-opt2').value = "";
+                document.getElementById('modal-opt3').value = "";
+                document.getElementById('modal-opt4').value = "";
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal-q').classList.add('hidden');
+        }
+
+        // --- 儲存題目至本地陣列 ---
+        function saveQuestionToLocal() {
+            const id = document.getElementById('modal-id').value;
+            const grade = document.getElementById('modal-grade').value;
+            const skill = document.getElementById('modal-skill').value;
+            const text = document.getElementById('modal-text').value.trim();
+            const qText = document.getElementById('modal-q-text').value.trim();
+            const opt1 = document.getElementById('modal-opt1').value.trim();
+            const opt2 = document.getElementById('modal-opt2').value.trim();
+            const opt3 = document.getElementById('modal-opt3').value.trim();
+            const opt4 = document.getElementById('modal-opt4').value.trim();
+
+            if (!text || !qText || !opt1 || !opt2 || !opt3 || !opt4) {
+                Swal.fire({ icon: 'warning', title: '欄位未填妥', text: '請確認文本、題目與所有四個選項皆已填寫！' });
+                return;
+            }
+
+            const newQ = {
+                id: id || `CUSTOM_${Date.now()}`, // 若為新增，產生唯一ID
+                grade: grade,
+                text: text,
+                q: qText,
+                options: [opt1, opt2, opt3, opt4],
+                skill: skill
+            };
+
+            if (id) {
+                // 更新
+                const index = questionsData.findIndex(item => item.id === id);
+                if (index !== -1) questionsData[index] = newQ;
+            } else {
+                // 新增
+                questionsData.unshift(newQ); // 加到最前面方便查看
+            }
+
+            isDataDirty = true;
+            renderQuestionsTable();
+            closeModal();
+            
+            // 提示音或小彈窗
+            Swal.fire({
+                toast: true, position: 'top-end', showConfirmButton: false, timer: 3000,
+                icon: 'success', title: '已暫存變更！請記得點擊「儲存同步到雲端」才會生效。'
+            });
+        }
+
+        // --- 刪除題目 ---
+        function deleteQuestion(id) {
+            Swal.fire({
+                title: '確定要刪除此題嗎？',
+                text: "此動作僅會在本地刪除，需點擊同步才會真正從資料庫刪除。",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: '是的，刪除！',
+                cancelButtonText: '取消'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    questionsData = questionsData.filter(item => item.id !== id);
+                    isDataDirty = true;
+                    renderQuestionsTable();
+                }
+            });
+        }
+
+        // --- 同步至伺服器 (Google Sheets) ---
+        async function syncToServer() {
+            if (!isDataDirty) {
+                Swal.fire({ icon: 'info', title: '無需同步', text: '目前沒有任何變更需要儲存。' });
+                return;
+            }
+
+            Swal.fire({
+                title: '同步中...',
+                text: '正在將題庫覆蓋至 Google 試算表，請勿關閉網頁。',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                const payload = {
+                    action: "syncQuestions",
+                    questions: questionsData
+                };
+
+                const res = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                if(data.status === 'success') {
+                    isDataDirty = false;
+                    Swal.fire({ icon: 'success', title: '同步成功！', text: '題庫已成功更新至雲端。', confirmButtonColor: '#3b82f6' });
+                } else {
+                    throw new Error("伺服器回傳失敗");
+                }
+            } catch (error) {
+                console.error(error);
+                Swal.fire({ icon: 'error', title: '同步失敗', text: '請檢查網路連線或 SCRIPT_URL 設定。' });
+            }
+        }
+
+        // --- 匯出 CSV 檔案 ---
+        function exportScoresCSV() {
+            if (scoresData.length === 0) {
+                Swal.fire({ icon: 'warning', title: '沒有資料', text: '目前尚無學生成績可供匯出。' });
+                return;
+            }
+
+            // 準備 CSV 標題
+            let csvContent = "測驗時間,年級,班級,姓名,總分,擷取理解,推論統整,評鑑反思\n";
+            
+            // 加入資料列 (處理字串中可能有的逗號)
+            scoresData.forEach(s => {
+                const row = [
+                    `"${s.timestamp}"`,
+                    `"${s.grade}"`,
+                    `"${s.className}"`,
+                    `"${s.name}"`,
+                    s.score,
+                    s.retrieve || 0,
+                    s.infer || 0,
+                    s.evaluate || 0
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            // 加入 BOM 讓 Excel 支援中文 UTF-8 顯示
+            const bom = "\uFEFF"; 
+            const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            // 建立下載連結
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            
+            // 檔名加上日期
+            const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
+            link.setAttribute("download", `閱讀測驗成績_${dateStr}.csv`);
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
